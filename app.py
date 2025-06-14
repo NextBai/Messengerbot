@@ -55,6 +55,43 @@ def handle_webhook():
         print(f"處理 webhook 時發生錯誤: {e}")
         return "錯誤", 500
 
+@app.route('/receive_recognition_result', methods=['POST'])
+def receive_recognition_result():
+    """接收來自本地手語辨識服務的結果"""
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({"status": "error", "message": "沒有收到資料"}), 400
+        
+        sender_id = data.get('sender_id')
+        recognition_result = data.get('recognition_result', '無法辨識')
+        confidence = data.get('confidence', 0)
+        timestamp = data.get('timestamp', '')
+        
+        if not sender_id:
+            return jsonify({"status": "error", "message": "缺少 sender_id"}), 400
+        
+        print(f"📝 收到手語辨識結果 - 用戶：{sender_id}")
+        print(f"🎯 辨識結果：{recognition_result}")
+        print(f"📊 信心度：{confidence}")
+        
+        # 發送辨識結果給用戶
+        result_message = f"🤖 手語辨識完成！\n\n✨ 辨識結果：{recognition_result}"
+        if confidence > 0:
+            result_message += f"\n📊 信心度：{confidence:.0%}"
+        
+        send_message(sender_id, result_message)
+        
+        return jsonify({
+            "status": "success", 
+            "message": "辨識結果已發送給用戶"
+        })
+        
+    except Exception as e:
+        print(f"處理辨識結果時發生錯誤：{e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 def handle_message(messaging_event):
     """處理一般訊息"""
     sender_id = messaging_event['sender']['id']
@@ -73,9 +110,9 @@ def handle_message(messaging_event):
                     # 下載影片到本地
                     success = download_video(video_url, sender_id)
                     if success:
-                        send_message(sender_id, "收到！")
+                        send_message(sender_id, "📥 影片已收到！正在進行手語辨識，請稍候...")
                     else:
-                        send_message(sender_id, "影片下載失敗，請重新傳送")
+                        send_message(sender_id, "❌ 影片處理失敗，請重新傳送")
                     return
             else:
                 send_message(sender_id, f"收到 {attachment.get('type')} 附件")
@@ -152,12 +189,22 @@ def download_video(video_url, sender_id):
     try:
         print(f"推送影片到本地服務：{video_url}")
         
+        # 取得目前的部署 URL (Render 會自動設定這些環境變數)
+        render_url = os.environ.get('RENDER_EXTERNAL_URL')
+        if not render_url:
+            # 如果沒有 RENDER_EXTERNAL_URL，嘗試建構 URL
+            app_name = os.environ.get('RENDER_SERVICE_NAME', 'your-app')
+            render_url = f"https://{app_name}.onrender.com"
+        
         # 準備要推送的資料
         data = {
             'video_url': video_url,
             'sender_id': sender_id,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
+            'messenger_webhook_url': f"{render_url}/receive_recognition_result"
         }
+        
+        print(f"🔗 回傳結果的 webhook URL: {data['messenger_webhook_url']}")
         
         # 推送到本地接收服務
         response = requests.post(
