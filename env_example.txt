@@ -1,0 +1,6 @@
+# Facebook Messenger Bot 設定
+VERIFY_TOKEN=your_custom_verify_token_here
+PAGE_ACCESS_TOKEN=your_facebook_page_access_token_here
+
+# Render 會自動設定 PORT，本機測試可以設定為 5000
+PORT=5000 
