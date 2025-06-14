@@ -1,0 +1,17 @@
+# Facebook 相關設定
+FACEBOOK_PAGE_ACCESS_TOKEN=你的_Facebook_頁面_Access_Token
+FACEBOOK_VERIFY_TOKEN=你的_驗證_Token
+
+# OpenAI 設定
+OPENAI_API_KEY=你的_OpenAI_API_金鑰
+
+# 影片處理後端 API
+BACKEND_API_URL=https://your-backend-api.com
+
+# 伺服器設定
+PORT=5000
+DEBUG=False
+WEBHOOK_URL=https://你的應用名.onrender.com/webhook
+
+# 日誌設定
+LOG_LEVEL=INFO 
