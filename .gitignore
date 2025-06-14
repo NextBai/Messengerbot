@@ -1,8 +1,12 @@
 # 影片檔案
 videos/
+received_videos/
 *.mp4
 *.avi
 *.mov
+
+# 本地服務（不上傳）
+local_receiver.py
 
 # Python
 __pycache__/

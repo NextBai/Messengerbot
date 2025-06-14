@@ -9,6 +9,7 @@ app = Flask(__name__)
 # 從環境變數取得設定
 VERIFY_TOKEN = os.environ.get('VERIFY_TOKEN', 'your_verify_token')
 PAGE_ACCESS_TOKEN = os.environ.get('PAGE_ACCESS_TOKEN', 'your_page_access_token')
+LOCAL_RECEIVER_URL = os.environ.get('LOCAL_RECEIVER_URL', 'http://localhost:5001')
 
 # Messenger API 網址
 FACEBOOK_API_URL = 'https://graph.facebook.com/v18.0/me/messages'
@@ -147,33 +148,33 @@ def send_quick_reply(recipient_id, message_text, quick_replies):
     )
 
 def download_video(video_url, sender_id):
-    """下載影片到本地"""
+    """推送影片到本地接收服務"""
     try:
-        # 建立 videos 資料夾（如果不存在）
-        if not os.path.exists('videos'):
-            os.makedirs('videos')
+        print(f"推送影片到本地服務：{video_url}")
         
-        # 生成檔案名稱
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"video_{sender_id}_{timestamp}.mp4"
-        file_path = os.path.join('videos', filename)
+        # 準備要推送的資料
+        data = {
+            'video_url': video_url,
+            'sender_id': sender_id,
+            'timestamp': datetime.now().isoformat()
+        }
         
-        print(f"開始下載影片：{video_url}")
+        # 推送到本地接收服務
+        response = requests.post(
+            f"{LOCAL_RECEIVER_URL}/receive_video",
+            json=data,
+            timeout=10
+        )
         
-        # 下載影片
-        response = requests.get(video_url, stream=True)
-        response.raise_for_status()
-        
-        # 寫入檔案
-        with open(file_path, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
-        
-        print(f"影片下載成功：{file_path}")
-        return True
+        if response.status_code == 200:
+            print(f"✅ 成功推送影片到本地服務")
+            return True
+        else:
+            print(f"❌ 推送失敗：{response.status_code} - {response.text}")
+            return False
         
     except Exception as e:
-        print(f"下載影片失敗：{e}")
+        print(f"推送影片到本地失敗：{e}")
         return False
 
 if __name__ == '__main__':
