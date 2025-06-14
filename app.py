@@ -76,12 +76,8 @@ def receive_recognition_result():
         print(f"🎯 辨識結果：{recognition_result}")
         print(f"📊 信心度：{confidence}")
         
-        # 發送辨識結果給用戶
-        result_message = f"🤖 手語辨識完成！\n\n✨ 辨識結果：{recognition_result}"
-        if confidence > 0:
-            result_message += f"\n📊 信心度：{confidence:.0%}"
-        
-        send_message(sender_id, result_message)
+        # 只發送純粹的辨識結果句子
+        send_message(sender_id, recognition_result)
         
         return jsonify({
             "status": "success", 
@@ -108,11 +104,7 @@ def handle_message(messaging_event):
                 video_url = attachment.get('payload', {}).get('url')
                 if video_url:
                     # 下載影片到本地
-                    success = download_video(video_url, sender_id)
-                    if success:
-                        send_message(sender_id, "📥 影片已收到！正在進行手語辨識，請稍候...")
-                    else:
-                        send_message(sender_id, "❌ 影片處理失敗，請重新傳送")
+                    download_video(video_url, sender_id)
                     return
             else:
                 send_message(sender_id, f"收到 {attachment.get('type')} 附件")
