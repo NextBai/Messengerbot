@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 class VideoProcessor:
     def __init__(self):
-        self.backend_url = os.getenv('BACKEND_API_URL', 'https://your-backend-api.com')
         self.temp_dir = tempfile.gettempdir()
     
     def save_video_temp(self, video_data, sender_id):
@@ -37,49 +36,24 @@ class VideoProcessor:
             return None
     
     def send_to_backend(self, video_data, sender_id, metadata=None):
-        """傳送影片到後端 API"""
+        """備用的影片處理方法（當手語辨識不可用時）"""
         try:
-            # 先儲存到暫存檔案
-            temp_file = self.save_video_temp(video_data, sender_id)
-            if not temp_file:
-                return False, "儲存影片失敗"
+            # 簡單的影片資訊分析
+            info = self.analyze_video_local(video_data)
             
-            # 準備上傳的資料
-            files = {
-                'video': ('video.mp4', open(temp_file, 'rb'), 'video/mp4')
-            }
-            
-            data = {
+            # 模擬處理結果
+            result = {
+                'message': '影片已接收並分析',
+                'video_info': info,
                 'sender_id': sender_id,
-                'timestamp': datetime.now().isoformat(),
-                'metadata': json.dumps(metadata or {})
+                'status': 'processed'
             }
             
-            # 傳送到後端
-            response = requests.post(
-                f"{self.backend_url}/api/videos/upload",
-                files=files,
-                data=data,
-                timeout=30
-            )
-            
-            # 清理暫存檔案
-            files['video'][1].close()
-            os.remove(temp_file)
-            
-            if response.status_code == 200:
-                result = response.json()
-                logger.info(f"影片上傳成功: {result}")
-                return True, result.get('message', '上傳成功')
-            else:
-                logger.error(f"後端回應錯誤: {response.status_code} - {response.text}")
-                return False, f"後端處理失敗: {response.status_code}"
+            logger.info(f"影片備用處理完成: {result}")
+            return True, result
                 
-        except requests.exceptions.Timeout:
-            logger.error("後端請求逾時")
-            return False, "後端處理逾時，請稍後再試"
         except Exception as e:
-            logger.error(f"傳送到後端失敗: {e}")
+            logger.error(f"影片備用處理失敗: {e}")
             return False, f"處理失敗: {str(e)}"
     
     def analyze_video_local(self, video_data):
@@ -101,22 +75,14 @@ class VideoProcessor:
             logger.error(f"影片分析失敗: {e}")
             return {}
 
-# 範例後端 API 格式
+# 影片處理器說明
 """
-後端 API 應該接收：
-POST /api/videos/upload
+VideoProcessor 類別提供基本的影片處理功能：
 
-FormData:
-- video: 影片檔案
-- sender_id: 發送者 ID
-- timestamp: 時間戳記
-- metadata: 額外資訊 (JSON 字串)
+主要功能：
+1. save_video_temp() - 暫存影片檔案
+2. analyze_video_local() - 本地影片資訊分析
+3. send_to_backend() - 備用處理方法（當手語辨識不可用時）
 
-回應格式:
-{
-    "success": true,
-    "message": "影片處理完成",
-    "video_id": "12345",
-    "analysis_result": {...}
-}
+注意：主要的手語辨識功能由 SignLanguageVideoProcessor 處理
 """ 
