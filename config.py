@@ -22,7 +22,7 @@ class Config:
     DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
     
     # Webhook 設定
-    WEBHOOK_URL = os.getenv('WEBHOOK_URL', 'https://你的域名.com/webhook')
+    WEBHOOK_URL = os.getenv('WEBHOOK_URL', 'https://messengerbot-1m0w.onrender.com/webhook')
     
     # 日誌設定
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
@@ -38,7 +38,8 @@ class Config:
         
         missing_configs = []
         for config in required_configs:
-            if not getattr(cls, config):
+            # 直接從環境變數讀取，而不是從類別屬性
+            if not os.getenv(config):
                 missing_configs.append(config)
         
         if missing_configs:
