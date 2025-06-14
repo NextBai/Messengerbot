@@ -365,48 +365,56 @@ class SignLanguageVideoProcessor:
         # 每5幀採樣一次進行快速掃描
         sampling_rate = 5
         
-        with self.feature_extractor.mp_holistic.Holistic(
-            static_image_mode=False,
-            model_complexity=0,  # 使用最輕量的模型
-            smooth_landmarks=False,
-            enable_segmentation=False,
-            min_detection_confidence=0.3,
-            min_tracking_confidence=0.3
-        ) as holistic:
-            
-            while True:
-                ret, frame = cap.read()
-                if not ret:
-                    break
+        logger.info("開始第一階段：快速活動分析")
+        
+        try:
+            with self.feature_extractor.mp_holistic.Holistic(
+                static_image_mode=False,
+                model_complexity=0,  # 使用最輕量的模型
+                smooth_landmarks=False,
+                enable_segmentation=False,
+                min_detection_confidence=0.3,
+                min_tracking_confidence=0.3
+            ) as holistic:
                 
-                frame_count += 1
-                segment_frame_count += 1
-                
-                # 採樣處理
-                if frame_count % sampling_rate != 0:
-                    continue
-                
-                # 檢測手部活動強度
-                activity_score = self._calculate_frame_activity(frame, holistic)
-                current_segment_activity += activity_score
-                
-                # 每2秒分一個段落進行分析
-                segment_duration = 2 * fps  # 2秒
-                if segment_frame_count >= segment_duration:
-                    avg_activity = current_segment_activity / (segment_duration / sampling_rate)
-                    segment_time = current_segment_start / fps if fps > 0 else 0
+                while True:
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
                     
-                    activity_segments.append({
-                        'start_frame': current_segment_start,
-                        'end_frame': frame_count,
-                        'activity_score': avg_activity,
-                        'timestamp': segment_time
-                    })
+                    frame_count += 1
+                    segment_frame_count += 1
                     
-                    # 重置段落
-                    current_segment_start = frame_count
-                    current_segment_activity = 0
-                    segment_frame_count = 0
+                    # 採樣處理
+                    if frame_count % sampling_rate != 0:
+                        continue
+                    
+                    # 檢測手部活動強度
+                    activity_score = self._calculate_frame_activity(frame, holistic)
+                    current_segment_activity += activity_score
+                    
+                    # 每2秒分一個段落進行分析
+                    segment_duration = 2 * fps  # 2秒
+                    if segment_frame_count >= segment_duration:
+                        avg_activity = current_segment_activity / (segment_duration / sampling_rate)
+                        segment_time = current_segment_start / fps if fps > 0 else 0
+                        
+                        activity_segments.append({
+                            'start_frame': current_segment_start,
+                            'end_frame': frame_count,
+                            'activity_score': avg_activity,
+                            'timestamp': segment_time
+                        })
+                        
+                        # 重置段落
+                        current_segment_start = frame_count
+                        current_segment_activity = 0
+                        segment_frame_count = 0
+                        
+        except Exception as e:
+            logger.error(f"第一階段活動分析失敗: {e}")
+            # 返回預設值
+            return 1, []
         
         # 處理最後一個段落
         if segment_frame_count > 0:
