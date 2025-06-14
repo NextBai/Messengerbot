@@ -7,33 +7,69 @@ from dotenv import load_dotenv
 import logging
 from video_processor import VideoProcessor
 from sign_language_processor import SignLanguageVideoProcessor
+from datetime import datetime
 
 # 載入環境變數
 load_dotenv()
 
+# 初始化 Flask 應用
 app = Flask(__name__)
 
 # 設定日誌
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
-# Facebook 相關設定
-PAGE_ACCESS_TOKEN = os.getenv('FACEBOOK_PAGE_ACCESS_TOKEN')
-VERIFY_TOKEN = os.getenv('FACEBOOK_VERIFY_TOKEN')
+# 從環境變數讀取設定 - 統一變數名稱
+VERIFY_TOKEN = os.getenv('VERIFY_TOKEN')
+PAGE_ACCESS_TOKEN = os.getenv('PAGE_ACCESS_TOKEN')
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+
+# 檢查必要環境變數
+if not all([VERIFY_TOKEN, PAGE_ACCESS_TOKEN, OPENAI_API_KEY]):
+    logger.error("缺少必要的環境變數")
+    missing = []
+    if not VERIFY_TOKEN: missing.append('VERIFY_TOKEN')
+    if not PAGE_ACCESS_TOKEN: missing.append('PAGE_ACCESS_TOKEN')
+    if not OPENAI_API_KEY: missing.append('OPENAI_API_KEY')
+    logger.error(f"缺少: {', '.join(missing)}")
+
+# 初始化 OpenAI 客戶端
+client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+
+# 延遲載入處理器以節省記憶體
+video_processor = None
+sign_language_processor = None
+
+def get_video_processor():
+    """延遲載入影片處理器"""
+    global video_processor
+    if video_processor is None:
+        video_processor = VideoProcessor()
+    return video_processor
+
+def get_sign_language_processor():
+    """延遲載入手語辨識處理器"""
+    global sign_language_processor
+    if sign_language_processor is None:
+        try:
+            sign_language_processor = SignLanguageVideoProcessor()
+            logger.info("手語辨識處理器載入成功")
+        except Exception as e:
+            logger.warning(f"手語辨識處理器載入失敗: {e}")
+            sign_language_processor = None
+    return sign_language_processor
 
 class MessengerBot:
     def __init__(self):
         # 在類別內部初始化 OpenAI 客戶端
-        self.client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+        self.client = client
         # 初始化影片處理器
-        self.video_processor = VideoProcessor()
+        self.video_processor = get_video_processor()
         # 初始化手語辨識處理器
-        try:
-            self.sign_language_processor = SignLanguageVideoProcessor()
-            logger.info("手語辨識器初始化成功")
-        except Exception as e:
-            logger.error(f"手語辨識器初始化失敗: {e}")
-            self.sign_language_processor = None
+        self.sign_language_processor = get_sign_language_processor()
         
     def send_message(self, recipient_id, message_text):
         """發送訊息到 Facebook Messenger"""
@@ -83,50 +119,74 @@ class MessengerBot:
             return "抱歉，我現在無法處理你的訊息，請稍後再試。"
     
     def download_video(self, video_url):
-        """下載影片檔案"""
+        """下載影片檔案 - Railway 優化版本"""
         try:
             headers = {'Authorization': f'Bearer {PAGE_ACCESS_TOKEN}'}
-            response = requests.get(video_url, headers=headers)
+            # 加入超時設定，避免長時間等待
+            response = requests.get(video_url, headers=headers, timeout=30)
             response.raise_for_status()
             
-            # 這裡可以儲存影片或進行處理
-            logger.info(f"影片下載成功，大小: {len(response.content)} bytes")
+            # 檢查檔案大小
+            content_length = response.headers.get('content-length')
+            if content_length:
+                size_mb = int(content_length) / (1024 * 1024)
+                if size_mb > 10:  # 限制 10MB
+                    logger.warning(f"影片檔案太大: {size_mb:.2f}MB")
+                    return None
             
+            logger.info(f"影片下載成功，大小: {len(response.content)} bytes")
             return response.content
+            
+        except requests.exceptions.Timeout:
+            logger.error("影片下載超時")
+            return None
         except Exception as e:
             logger.error(f"影片下載失敗: {e}")
             return None
     
     def process_video_message(self, sender_id, video_url):
-        """處理影片訊息 - 手語辨識"""
+        """處理影片訊息 - Railway 優化版本"""
         logger.info(f"收到來自 {sender_id} 的影片: {video_url}")
         
         # 先回應用戶，讓他知道我們收到了
         self.send_message(sender_id, "🤟 收到影片！正在進行手語辨識，請稍等...")
         
-        # 下載影片
-        video_data = self.download_video(video_url)
-        
-        if not video_data:
-            self.send_message(sender_id, "❌ 抱歉，影片下載失敗，請檢查網路連線後再試。")
-            return
-        
-        # 檢查是否有手語辨識器
-        if not self.sign_language_processor:
-            # 備用：使用原來的影片處理邏輯
-            video_info = self.video_processor.analyze_video_local(video_data)
-            success, message = self.video_processor.send_to_backend(
-                video_data, sender_id, metadata=video_info
-            )
-            if success:
-                response_text = f"✅ 影片處理完成！\n📊 檔案大小: {video_info.get('size_mb', 0)} MB\n📝 後端回應: {message}"
-            else:
-                response_text = f"❌ 影片處理失敗: {message}"
-            self.send_message(sender_id, response_text)
-            return
-        
-        # 進行手語辨識
         try:
+            # 下載影片（加入超時和大小限制）
+            video_data = self.download_video(video_url)
+            
+            if not video_data:
+                self.send_message(sender_id, "❌ 抱歉，影片下載失敗，請檢查網路連線後再試。")
+                return
+            
+            # 檢查影片大小（Railway 記憶體優化）
+            video_size_mb = len(video_data) / (1024 * 1024)
+            if video_size_mb > 10:  # 限制 10MB
+                self.send_message(sender_id, "影片檔案太大（超過10MB），請傳送較小的影片檔案。")
+                return
+            
+            # 檢查是否有手語辨識器
+            if not self.sign_language_processor:
+                # 備用：使用原來的影片處理邏輯
+                video_info = self.video_processor.analyze_video_local(video_data)
+                success, message = self.video_processor.send_to_backend(
+                    video_data, sender_id, metadata=video_info
+                )
+                if success:
+                    response_text = f"✅ 影片處理完成！\n📊 檔案大小: {video_info.get('size_mb', 0)} MB"
+                    if self.client:
+                        # 使用 ChatGPT 生成友善回應
+                        chatgpt_response = self.get_chatgpt_response(
+                            "用戶發送了影片但手語辨識功能暫時無法使用。請用繁體中文友善地說明收到了影片，並鼓勵用戶用文字描述想表達的內容。", 
+                            sender_id
+                        )
+                        response_text += f"\n\n{chatgpt_response}"
+                else:
+                    response_text = f"❌ 影片處理失敗: {message}"
+                self.send_message(sender_id, response_text)
+                return
+            
+            # 進行手語辨識
             success, result = self.sign_language_processor.process_video(video_data, sender_id)
             
             if success:
@@ -139,6 +199,14 @@ class MessengerBot:
                 response_text += f"🔤 辨識到的手語詞彙：{', '.join(word_sequence)}\n"
                 response_text += f"📝 完整句子：{sentence}\n"
                 response_text += f"📊 共辨識出 {word_count} 個手語詞彙"
+                
+                # 如果有 ChatGPT，生成更自然的回應
+                if self.client and sentence:
+                    chatgpt_response = self.get_chatgpt_response(
+                        f"用戶透過手語表達了：{sentence}。請用繁體中文自然地回應這個內容。", 
+                        sender_id
+                    )
+                    response_text += f"\n\n💬 AI 回應：{chatgpt_response}"
                 
                 logger.info(f"手語辨識成功 - 詞彙: {word_sequence}, 句子: {sentence}")
             else:
@@ -153,6 +221,14 @@ class MessengerBot:
         except Exception as e:
             response_text = f"❌ 處理影片時發生錯誤: {str(e)}\n🔧 請稍後再試或聯繫技術支援。"
             logger.error(f"手語辨識處理錯誤: {e}")
+        finally:
+            # 清理記憶體（Railway 優化）
+            try:
+                del video_data
+                import gc
+                gc.collect()
+            except:
+                pass
         
         self.send_message(sender_id, response_text)
     
@@ -224,8 +300,9 @@ def health_check():
     """健康檢查端點"""
     return jsonify({
         'status': 'healthy',
-        'message': 'Messenger Bot 運行正常'
-    })
+        'timestamp': datetime.now().isoformat(),
+        'service': 'messenger-sign-language-bot'
+    }), 200
 
 @app.route('/', methods=['GET'])
 def home():
@@ -240,5 +317,12 @@ def home():
     })
 
 if __name__ == '__main__':
-    port = int(os.getenv('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=True) 
+    # Railway 部署時不會執行這段，但保留給本地測試
+    port = int(os.getenv('PORT', 10000))
+    debug_mode = os.getenv('DEBUG', 'False').lower() == 'true'
+    
+    logger.info(f"🚀 本地測試模式啟動")
+    logger.info(f"📡 監聽端口: {port}")
+    logger.info(f"🔧 除錯模式: {debug_mode}")
+    
+    app.run(host='0.0.0.0', port=port, debug=debug_mode) 

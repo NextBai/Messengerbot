@@ -1,14 +1,17 @@
-# Facebook 相關設定
-FACEBOOK_PAGE_ACCESS_TOKEN=你的_Facebook_頁面_Access_Token
-FACEBOOK_VERIFY_TOKEN=你的_驗證_Token
+# Facebook Messenger 設定
+VERIFY_TOKEN=your_verify_token_here
+PAGE_ACCESS_TOKEN=your_page_access_token_here
 
 # OpenAI 設定
-OPENAI_API_KEY=你的_OpenAI_API_金鑰
+OPENAI_API_KEY=your_openai_api_key_here
 
 # 伺服器設定
-PORT=5000
+PORT=10000
 DEBUG=False
-WEBHOOK_URL=https://你的應用名.onrender.com/webhook
+
+# Railway 環境設定（部署時自動設定）
+RAILWAY_ENVIRONMENT=production
+RAILWAY_STATIC_URL=https://your-app-name.up.railway.app
 
 # 日誌設定
 LOG_LEVEL=INFO 
