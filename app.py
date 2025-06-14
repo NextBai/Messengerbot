@@ -2,6 +2,7 @@ import os
 import json
 import requests
 from flask import Flask, request, jsonify
+from datetime import datetime
 
 app = Flask(__name__)
 
@@ -56,14 +57,33 @@ def handle_webhook():
 def handle_message(messaging_event):
     """處理一般訊息"""
     sender_id = messaging_event['sender']['id']
-    message_text = messaging_event.get('message', {}).get('text', '')
+    message = messaging_event.get('message', {})
+    message_text = message.get('text', '')
+    attachments = message.get('attachments', [])
     
     print(f"收到訊息 from {sender_id}: {message_text}")
     
-    # 簡單的回應邏輯
-    response_text = f"收到訊息：{message_text}"
+    # 檢查是否有附件
+    if attachments:
+        for attachment in attachments:
+            if attachment.get('type') == 'video':
+                video_url = attachment.get('payload', {}).get('url')
+                if video_url:
+                    # 下載影片到本地
+                    success = download_video(video_url, sender_id)
+                    if success:
+                        send_message(sender_id, "收到！")
+                    else:
+                        send_message(sender_id, "影片下載失敗，請重新傳送")
+                    return
+            else:
+                send_message(sender_id, f"收到 {attachment.get('type')} 附件")
+                return
     
-    send_message(sender_id, response_text)
+    # 處理文字訊息
+    if message_text:
+        response_text = f"收到訊息：{message_text}"
+        send_message(sender_id, response_text)
 
 def handle_postback(messaging_event):
     """處理 postback 事件（按鈕點擊等）"""
@@ -125,6 +145,36 @@ def send_quick_reply(recipient_id, message_text, quick_replies):
         params=params,
         json=data
     )
+
+def download_video(video_url, sender_id):
+    """下載影片到本地"""
+    try:
+        # 建立 videos 資料夾（如果不存在）
+        if not os.path.exists('videos'):
+            os.makedirs('videos')
+        
+        # 生成檔案名稱
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"video_{sender_id}_{timestamp}.mp4"
+        file_path = os.path.join('videos', filename)
+        
+        print(f"開始下載影片：{video_url}")
+        
+        # 下載影片
+        response = requests.get(video_url, stream=True)
+        response.raise_for_status()
+        
+        # 寫入檔案
+        with open(file_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        
+        print(f"影片下載成功：{file_path}")
+        return True
+        
+    except Exception as e:
+        print(f"下載影片失敗：{e}")
+        return False
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

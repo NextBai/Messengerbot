@@ -1,0 +1,28 @@
+# 影片檔案
+videos/
+*.mp4
+*.avi
+*.mov
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# 環境變數
+.env
+.env.local
+
+# 系統檔案
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 日誌檔案
+*.log 
