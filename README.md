@@ -41,22 +41,39 @@ git push -u origin main
 
 部署完成後會得到：`https://你的應用名.onrender.com/webhook`
 
-## Facebook 設定步驟
+## Facebook Webhook 設定 🔧
 
-### 1. 建立 Facebook 應用程式
-1. 前往 [Facebook for Developers](https://developers.facebook.com/)
-2. 建立新的應用程式
-3. 新增 "Messenger" 產品
+### 重要概念
+- **回呼網址**: `https://你的應用名.onrender.com/webhook`
+- **驗證權杖**: 你自己設定的密碼（兩邊要一樣）
 
-### 2. 設定 Webhook
-1. 在 Messenger 設定中，新增 Webhook URL: `https://你的域名.com/webhook`
-2. 驗證權杖使用你在 `.env` 中設定的 `FACEBOOK_VERIFY_TOKEN`
-3. 訂閱事件：`messages`, `messaging_postbacks`
+### 詳細設定步驟
 
-### 3. 取得頁面存取權杖
-1. 選擇你的 Facebook 頁面
-2. 產生頁面存取權杖
-3. 將權杖加入 `.env` 檔案
+1. **前往 [Facebook for Developers](https://developers.facebook.com/)**
+   - 建立應用程式
+   - 新增 "Messenger" 產品
+
+2. **設定 Webhook**
+   ```
+   回呼網址: https://你的應用名.onrender.com/webhook
+   驗證權杖: my_super_secret_verify_token_2024
+   訂閱事件: messages, messaging_postbacks
+   ```
+
+3. **取得頁面存取權杖**
+   - 選擇你的 Facebook 頁面
+   - 產生頁面存取權杖（很長的一串）
+
+4. **在 Render 設定環境變數**
+   ```
+   FACEBOOK_PAGE_ACCESS_TOKEN=EAAxxxxxx（長權杖）
+   FACEBOOK_VERIFY_TOKEN=my_super_secret_verify_token_2024
+   OPENAI_API_KEY=sk-xxxxx
+   ```
+
+⚠️ **重點**：`FACEBOOK_VERIFY_TOKEN` 在 Facebook 和 Render 中必須**完全一樣**！
+
+📋 **詳細步驟請參考**: [facebook_setup.md](facebook_setup.md)
 
 ## API 端點
 

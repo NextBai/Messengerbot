@@ -15,16 +15,14 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 初始化 OpenAI 客戶端
-client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
-
 # Facebook 相關設定
 PAGE_ACCESS_TOKEN = os.getenv('FACEBOOK_PAGE_ACCESS_TOKEN')
 VERIFY_TOKEN = os.getenv('FACEBOOK_VERIFY_TOKEN')
 
 class MessengerBot:
     def __init__(self):
-        self.client = client
+        # 在類別內部初始化 OpenAI 客戶端
+        self.client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
         
     def send_message(self, recipient_id, message_text):
         """發送訊息到 Facebook Messenger"""
