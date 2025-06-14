@@ -13,15 +13,26 @@ import torch
 import torch.nn as nn
 import tempfile
 import logging
-import mediapipe as mp
 from openai import OpenAI
 import pandas as pd
+
+# 安全導入 mediapipe
+try:
+    import mediapipe as mp
+    MEDIAPIPE_AVAILABLE = True
+except ImportError:
+    MEDIAPIPE_AVAILABLE = False
+    mp = None
+    logging.warning("MediaPipe 未安裝，手語辨識功能將受限")
 
 logger = logging.getLogger(__name__)
 
 # 複製手語辨識系統的核心類別
 class FeatureExtractor:
     def __init__(self):
+        if not MEDIAPIPE_AVAILABLE:
+            raise ImportError("MediaPipe 未安裝，無法初始化特徵提取器")
+        
         # 初始化MediaPipe模型
         self.mp_holistic = mp.solutions.holistic
         self.mp_drawing = mp.solutions.drawing_utils
@@ -158,7 +169,17 @@ class SignLanguageVideoProcessor:
     
     def __init__(self):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.feature_extractor = FeatureExtractor()
+        
+        # 檢查 MediaPipe 可用性
+        if not MEDIAPIPE_AVAILABLE:
+            logger.warning("MediaPipe 未安裝，手語辨識功能將不可用")
+            self.feature_extractor = None
+        else:
+            try:
+                self.feature_extractor = FeatureExtractor()
+            except Exception as e:
+                logger.error(f"特徵提取器初始化失敗: {e}")
+                self.feature_extractor = None
         
         # 模型和標籤配置
         self.model_path = self._get_model_path()
@@ -255,6 +276,10 @@ class SignLanguageVideoProcessor:
     def process_video(self, video_data, sender_id):
         """處理影片並回傳手語辨識結果"""
         try:
+            # 檢查 MediaPipe 可用性
+            if not MEDIAPIPE_AVAILABLE or self.feature_extractor is None:
+                return False, "手語辨識功能暫時不可用，MediaPipe 組件未正確安裝"
+            
             # 儲存影片到暫存檔案
             temp_video_path = self._save_temp_video(video_data, sender_id)
             if not temp_video_path:
